@@ -8,10 +8,42 @@ on:
     branches: [master]
 
 jobs:
-  CodeQL-Build:
-
+  ci-config:
     runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check-ref.outputs.enabled }}
+    steps:
+      - name: try to clone ci-config branch
+        continue-on-error: true
+        run: |
+          git -c protocol.version=2 clone \
+            --no-tags \
+            --single-branch \
+            -b ci-config \
+            --depth 1 \
+            --no-checkout \
+            --filter=blob:none \
+            https://github.com/${{ github.repository }} \
+            config-repo &&
+            cd config-repo &&
+            git checkout HEAD -- ci/config
+      - id: check-ref
+        name: check whether CI is enabled for ref
+        run: |
+          enabled=yes
+          if test -x config-repo/ci/config/allow-ref &&
+             ! config-repo/ci/config/allow-ref '${{ github.ref }}'
+          then
+            enabled=no
+          fi
+          echo "::set-output name=enabled::$enabled"  
 
+  CodeQL-Build:
+    needs: ci-config
+    runs-on: ubuntu-latest
+    env:
+      CC: gcc
+      jobname: linux-gcc
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -34,8 +66,8 @@ jobs:
 
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v1
+    # - name: Autobuild
+    #   uses: github/codeql-action/autobuild@v1
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 https://git.io/JvXDl
@@ -47,6 +79,9 @@ jobs:
     #- run: |
     #   make bootstrap
     #   make release
+
+    - run: ci/install-dependencies.sh
+    - run: ci/run-build-and-tests.sh
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
