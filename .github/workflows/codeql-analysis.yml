@@ -1,5 +1,8 @@
 name: "Code scanning - action"
 
+env:
+  DEVELOPER: 1
+  
 on:
   push:
     branches: [master, ]
